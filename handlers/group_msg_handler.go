@@ -1,13 +1,16 @@
 package handlers
 
 import (
-	"errors"
 	"fmt"
+	"log"
+	"math/rand"
+	"strings"
+	"time"
+
 	"github.com/eatmoreapple/openwechat"
 	"github.com/qingconglaixueit/wechatbot/gpt"
 	"github.com/qingconglaixueit/wechatbot/pkg/logger"
 	"github.com/qingconglaixueit/wechatbot/service"
-	"strings"
 )
 
 var _ MessageHandlerInterface = (*GroupMessageHandler)(nil)
@@ -32,14 +35,14 @@ func GroupMessageContextHandler() func(ctx *openwechat.MessageContext) {
 		// 获取用户消息处理器
 		handler, err := NewGroupMessageHandler(msg)
 		if err != nil {
-			logger.Warning(fmt.Sprintf("init group message handler error: %s", err))
+			logger.Warning(fmt.Sprintf("init group message handler error: %v", err))
 			return
 		}
 
 		// 处理用户消息
 		err = handler.handle()
 		if err != nil {
-			logger.Warning(fmt.Sprintf("handle group message error: %s", err))
+			logger.Warning(fmt.Sprintf("handle group message error: %v", err))
 		}
 	}
 }
@@ -78,7 +81,16 @@ func (g *GroupMessageHandler) handle() error {
 
 // ReplyText 发息送文本消到群
 func (g *GroupMessageHandler) ReplyText() error {
-	logger.Info(fmt.Sprintf("Received Group %v Text Msg : %v", g.group.NickName, g.msg.Content))
+	if time.Now().Unix()-g.msg.CreateTime > 60 {
+		return nil
+	}
+
+	maxInt := rand.New(rand.NewSource(time.Now().UnixNano())).Intn(5)
+	time.Sleep(time.Duration(maxInt+1) * time.Second)
+
+	log.Printf("Received Group[%v], Content[%v], CreateTime[%v]", g.group.NickName, g.msg.Content,
+		time.Unix(g.msg.CreateTime, 0).Format("2006/01/02 15:04:05"))
+
 	var (
 		err   error
 		reply string
@@ -92,18 +104,20 @@ func (g *GroupMessageHandler) ReplyText() error {
 	// 2.获取请求的文本，如果为空字符串不处理
 	requestText := g.getRequestText()
 	if requestText == "" {
-		logger.Info("user message is null")
+		log.Println("group message is empty")
 		return nil
 	}
 
 	// 3.请求GPT获取回复
 	reply, err = gpt.Completions(requestText)
 	if err != nil {
-		// 2.1 将GPT请求失败信息输出给用户，省得整天来问又不知道日志在哪里。
-		errMsg := fmt.Sprintf("gpt request error: %v", err)
-		_, err = g.msg.ReplyText(errMsg)
+		text := err.Error()
+		if strings.Contains(err.Error(), "context deadline exceeded") {
+			text = deadlineExceededText
+		}
+		_, err = g.msg.ReplyText(text)
 		if err != nil {
-			return errors.New(fmt.Sprintf("response group error: %v ", err))
+			return fmt.Errorf("reply group error: %v", err)
 		}
 		return err
 	}
@@ -112,7 +126,7 @@ func (g *GroupMessageHandler) ReplyText() error {
 	g.service.SetUserSessionContext(requestText, reply)
 	_, err = g.msg.ReplyText(g.buildReplyText(reply))
 	if err != nil {
-		return errors.New(fmt.Sprintf("response user error: %v ", err))
+		return fmt.Errorf("reply group error: %v ", err)
 	}
 
 	// 5.返回错误信息
@@ -132,7 +146,7 @@ func (g *GroupMessageHandler) getRequestText() string {
 		return ""
 	}
 
-	// 3.获取上下文，拼接在一起，如果字符长度超出4000，截取为4000。（GPT按字符长度算），达芬奇3最大为4068，也许后续为了适应要动态进行判断。
+	// 3.获取上下文拼接在一起,如果字符长度超出4000截取为4000(GPT按字符长度算),达芬奇3最大为4068,也许后续为了适应要动态进行判断
 	sessionText := g.service.GetUserSessionContext()
 	if sessionText != "" {
 		requestText = sessionText + "\n" + requestText
@@ -146,7 +160,7 @@ func (g *GroupMessageHandler) getRequestText() string {
 	runeRequestText := []rune(requestText)
 	lastChar := string(runeRequestText[len(runeRequestText)-1:])
 	if strings.Index(punctuation, lastChar) < 0 {
-		requestText = requestText + "？" // 判断最后字符是否加了标点，没有的话加上句号，避免openai自动补齐引起混乱。
+		requestText = requestText + "？" // 判断最后字符是否加了标点,没有的话加上句号,避免openai自动补齐引起混乱
 	}
 
 	// 5.返回请求文本
@@ -164,13 +178,14 @@ func (g *GroupMessageHandler) buildReplyText(reply string) string {
 	}
 	reply = strings.TrimSpace(reply)
 	if reply == "" {
-		return atText + " 请求得不到任何有意义的回复，请具体提出问题。"
+		return atText + " " + deadlineExceededText
 	}
 
-	// 2.拼接回复,@我的用户，问题，回复
+	// 2.拼接回复, @我的用户, 问题, 回复
 	replaceText := "@" + g.self.NickName
 	question := strings.TrimSpace(strings.ReplaceAll(g.msg.Content, replaceText, ""))
-	reply = atText + "\n" + question + "\n --------------------------------\n" + reply
+	hr := strings.Repeat("-", 36)
+	reply = atText + "\n" + question + "\n" + hr + "\n" + reply
 	reply = strings.Trim(reply, "\n")
 
 	// 3.返回回复的内容

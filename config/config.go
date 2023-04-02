@@ -3,12 +3,12 @@ package config
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/qingconglaixueit/wechatbot/pkg/logger"
-	"log"
 	"os"
 	"strconv"
 	"sync"
 	"time"
+
+	"github.com/qingconglaixueit/wechatbot/pkg/logger"
 )
 
 // Configuration 项目配置
@@ -44,7 +44,7 @@ func LoadConfig() *Configuration {
 			MaxTokens:         512,
 			Model:             "text-davinci-003",
 			Temperature:       0.9,
-			SessionClearToken: "下一个问题",
+			SessionClearToken: "下个问题",
 		}
 
 		// 判断配置文件是否存在，存在直接JSON读取
@@ -52,14 +52,14 @@ func LoadConfig() *Configuration {
 		if err == nil {
 			f, err := os.Open("config.json")
 			if err != nil {
-				log.Fatalf("open config err: %v", err)
+				logger.Danger(fmt.Sprintf("open config error: %v", err))
 				return
 			}
 			defer f.Close()
 			encoder := json.NewDecoder(f)
 			err = encoder.Decode(config)
 			if err != nil {
-				log.Fatalf("decode config err: %v", err)
+				logger.Danger(fmt.Sprintf("decode config error: %v", err))
 				return
 			}
 		}
@@ -81,7 +81,7 @@ func LoadConfig() *Configuration {
 		if SessionTimeout != "" {
 			duration, err := time.ParseDuration(SessionTimeout)
 			if err != nil {
-				logger.Danger(fmt.Sprintf("config session timeout err: %v ,get is %v", err, SessionTimeout))
+				logger.Danger(fmt.Sprintf("config session timeout error: %v, get is %v", err, SessionTimeout))
 				return
 			}
 			config.SessionTimeout = duration
@@ -92,7 +92,7 @@ func LoadConfig() *Configuration {
 		if MaxTokens != "" {
 			max, err := strconv.Atoi(MaxTokens)
 			if err != nil {
-				logger.Danger(fmt.Sprintf("config MaxTokens err: %v ,get is %v", err, MaxTokens))
+				logger.Danger(fmt.Sprintf("config max tokens error: %v ,get is %v", err, MaxTokens))
 				return
 			}
 			config.MaxTokens = uint(max)
@@ -100,7 +100,7 @@ func LoadConfig() *Configuration {
 		if Temperature != "" {
 			temp, err := strconv.ParseFloat(Temperature, 64)
 			if err != nil {
-				logger.Danger(fmt.Sprintf("config Temperature err: %v ,get is %v", err, Temperature))
+				logger.Danger(fmt.Sprintf("config temperature error: %v, get is %v", err, Temperature))
 				return
 			}
 			config.Temperature = temp
@@ -114,7 +114,7 @@ func LoadConfig() *Configuration {
 
 	})
 	if config.ApiKey == "" {
-		logger.Danger("config err: api key required")
+		logger.Danger("config error: api key required")
 	}
 
 	return config

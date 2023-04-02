@@ -1,14 +1,17 @@
 package handlers
 
 import (
-	"errors"
 	"fmt"
+	"log"
+	"math/rand"
+	"strings"
+	"time"
+
 	"github.com/eatmoreapple/openwechat"
 	"github.com/qingconglaixueit/wechatbot/config"
 	"github.com/qingconglaixueit/wechatbot/gpt"
 	"github.com/qingconglaixueit/wechatbot/pkg/logger"
 	"github.com/qingconglaixueit/wechatbot/service"
-	"strings"
 )
 
 var _ MessageHandlerInterface = (*UserMessageHandler)(nil)
@@ -65,7 +68,16 @@ func (h *UserMessageHandler) handle() error {
 
 // ReplyText 发送文本消息到群
 func (h *UserMessageHandler) ReplyText() error {
-	logger.Info(fmt.Sprintf("Received User %v Text Msg : %v", h.sender.NickName, h.msg.Content))
+	if time.Now().Unix()-h.msg.CreateTime > 60 {
+		return nil
+	}
+
+	maxInt := rand.New(rand.NewSource(time.Now().UnixNano())).Intn(5)
+	time.Sleep(time.Duration(maxInt+1) * time.Second)
+
+	log.Printf("Received User[%v], Content[%v], CreateTime[%v]", h.sender.NickName, h.msg.Content,
+		time.Unix(h.msg.CreateTime, 0).Format("2006/01/02 15:04:05"))
+
 	var (
 		reply string
 		err   error
@@ -73,18 +85,20 @@ func (h *UserMessageHandler) ReplyText() error {
 	// 1.获取上下文，如果字符串为空不处理
 	requestText := h.getRequestText()
 	if requestText == "" {
-		logger.Info("user message is null")
+		log.Println("user message is empty")
 		return nil
 	}
-	logger.Info(fmt.Sprintf("h.sender.NickName == %+v", h.sender.NickName))
+
 	// 2.向GPT发起请求，如果回复文本等于空,不回复
 	reply, err = gpt.Completions(h.getRequestText())
 	if err != nil {
-		// 2.1 将GPT请求失败信息输出给用户，省得整天来问又不知道日志在哪里。
-		errMsg := fmt.Sprintf("gpt request error: %v", err)
-		_, err = h.msg.ReplyText(errMsg)
+		text := err.Error()
+		if strings.Contains(err.Error(), "context deadline exceeded") {
+			text = deadlineExceededText
+		}
+		_, err = h.msg.ReplyText(text)
 		if err != nil {
-			return errors.New(fmt.Sprintf("response user error: %v ", err))
+			return fmt.Errorf("reply user error: %v ", err)
 		}
 		return err
 	}
@@ -93,7 +107,7 @@ func (h *UserMessageHandler) ReplyText() error {
 	h.service.SetUserSessionContext(requestText, reply)
 	_, err = h.msg.ReplyText(buildUserReply(reply))
 	if err != nil {
-		return errors.New(fmt.Sprintf("response user error: %v ", err))
+		return fmt.Errorf("reply user error: %v ", err)
 	}
 
 	// 3.返回错误
@@ -136,10 +150,8 @@ func buildUserReply(reply string) string {
 		reply = strings.Trim(reply, trimText)
 	}
 	reply = strings.TrimSpace(reply)
-
-	reply = strings.TrimSpace(reply)
 	if reply == "" {
-		return "请求得不到任何有意义的回复，请具体提出问题。"
+		return deadlineExceededText
 	}
 
 	// 2.如果用户有配置前缀，加上前缀

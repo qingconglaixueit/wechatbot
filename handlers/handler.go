@@ -2,16 +2,18 @@ package handlers
 
 import (
 	"fmt"
-	"github.com/qingconglaixueit/wechatbot/config"
-	"github.com/qingconglaixueit/wechatbot/pkg/logger"
 	"github.com/eatmoreapple/openwechat"
 	"github.com/patrickmn/go-cache"
+	"github.com/qingconglaixueit/wechatbot/config"
+	"github.com/qingconglaixueit/wechatbot/pkg/logger"
 	"github.com/skip2/go-qrcode"
 	"log"
 	"runtime"
 	"strings"
 	"time"
 )
+
+const deadlineExceededText = "请求GPT服务器超时[裂开]得不到回复，请重新发送问题[旺柴]"
 
 var c = cache.New(config.LoadConfig().SessionTimeout, time.Minute*5)
 
@@ -23,13 +25,11 @@ type MessageHandlerInterface interface {
 
 // QrCodeCallBack 登录扫码回调，
 func QrCodeCallBack(uuid string) {
-	if runtime.GOOS == "windows" {
-		// 运行在Windows系统上
+	if runtime.GOOS == "windows" { // 运行在Windows系统上
 		openwechat.PrintlnQrcodeUrl(uuid)
 	} else {
-		log.Println("login in linux")
 		url := "https://login.weixin.qq.com/l/" + uuid
-		log.Printf("如果二维码无法扫描，请缩小控制台尺寸，或更换命令行工具，缩小二维码像素")
+		log.Println("如果二维码无法扫描，请缩小控制台尺寸，或更换命令行工具，缩小二维码像素。")
 		q, _ := qrcode.New(url, qrcode.High)
 		fmt.Println(q.ToSmallString(true))
 	}

@@ -22,13 +22,14 @@ func (r *Rule) SetWork(work bool) {
 	isWork = work
 	return
 }
+
 func (r *Rule) GetWork() bool {
 	lock.Lock()
 	defer lock.Unlock()
 	return isWork
 }
 
-// 判断时间在今天的早上 9点到 晚上 9 点区间内
+// 判断时间在今天的早上9点到晚上9点区间内
 func (r *Rule) IsWorkTime(s int, e int) bool {
 	if s < 0 || s > 24 {
 		s = STARTTIME

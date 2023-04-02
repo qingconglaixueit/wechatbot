@@ -24,7 +24,7 @@ func Info(args ...interface{}) {
 // Danger 错误 为什么不命名为 error？避免和 error 类型重名
 func Danger(args ...interface{}) {
 	Logger.SetPrefix("[ERROR]")
-	Logger.Fatal(args...)
+	Logger.Println(args...)
 }
 
 // Warning 警告
@@ -35,6 +35,6 @@ func Warning(args ...interface{}) {
 
 // DeBug debug
 func DeBug(args ...interface{}) {
-	Logger.SetPrefix("[DeBug]")
+	Logger.SetPrefix("[DEBUG]")
 	Logger.Println(args...)
 }
